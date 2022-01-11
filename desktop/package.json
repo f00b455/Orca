@@ -28,6 +28,8 @@
     "electron-packager": "^15.1.0"
   },
   "dependencies": {
+    "abletonlink-addon": "file:/Users/f00b455/haxor/dev/sound/f00b455/abletonlink-node-addon",
+    "d3-timer": "^3.0.1",
     "node-osc": "^4.1.9"
   },
   "standard": {

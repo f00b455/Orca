@@ -11,8 +11,10 @@
 /* global Clock */
 /* global Theme */
 
-function Client () {
-  this.version = 178
+const AbletonLink = require("abletonlink-addon")
+
+function Client() {
+  this.version = 177
   this.library = library
 
   this.theme = new Theme(this)
@@ -24,7 +26,39 @@ function Client () {
   this.io = new IO(this)
   this.cursor = new Cursor(this)
   this.commander = new Commander(this)
-  this.clock = new Clock(this)
+  this.clock = new ClockAbletonLink(this)
+
+  // Ableton Link
+  this.link = new AbletonLink()
+  this.link.enable()
+  this.link.enableStartStopSync()
+  this.numPeers = 0
+
+  this.link.setTempoCallback((newTempo) => {
+    console.log('Ableton Link', 'New Tempo', newTempo)
+    newTempo = this.link.getTempo(true)
+    if (this.clock.isLinkEnabled() && this.clock.speed.value != newTempo) {
+      this.clock.setSpeed(newTempo, newTempo, this.link.isPlaying())
+      this.update()
+    };
+  });
+
+  this.link.setStartStopCallback((startStopState) => {
+    console.log('Ableton Link', startStopState ? 'Start' : 'Stop')
+    if (startStopState && this.clock.isPaused) {
+      this.clock.play(false, false, true)
+    } else if (!startStopState && !this.clock.isPaused) {
+      this.clock.stop(false)
+      this.clock.setFrame(0)
+      this.update()
+    }
+  });
+
+  this.link.setNumPeersCallback((newNumPeers) => {
+    console.log('Ableton Link', 'NumPeers: ' + newNumPeers)
+    this.numPeers = newNumPeers
+    this.update()
+  });
 
   // Settings
   this.scale = window.devicePixelRatio
@@ -117,6 +151,7 @@ function Client () {
     this.acels.set('Midi', 'Next Input Device', 'CmdOrCtrl+,', () => { this.clock.setFrame(0); this.io.midi.selectNextInput() })
     this.acels.set('Midi', 'Next Output Device', 'CmdOrCtrl+.', () => { this.clock.setFrame(0); this.io.midi.selectNextOutput() })
     this.acels.set('Midi', 'Refresh Devices', 'CmdOrCtrl+Shift+M', () => { this.io.midi.refresh() })
+    this.acels.set('Midi', 'Toggle Ableton Link', 'CmdOrCtrl+Shift+L', () => { this.toggleLink() })
 
     this.acels.set('Communication', 'Choose OSC Port', 'alt+O', () => { this.commander.start('osc:') })
     this.acels.set('Communication', 'Choose UDP Port', 'alt+U', () => { this.commander.start('udp:') })
@@ -158,6 +193,28 @@ function Client () {
     this.orca.run()
     this.io.run()
     this.update()
+  }
+
+  this.toggleLink = () => {
+
+    console.log(this.link)
+
+    if (this.clock.isLinkEnabled()) {
+      console.log('Ableton Link Disabled')
+      console.log(this.link.getTimeAtBeat(22))
+      this.link.disable()
+      this.link.disableStartStopSync()
+      this.clock.isPuppet = false
+      this.clock.puppetSource = null
+      console.log(this.link.getSessionState())
+      this.clock.setSpeed(this.link.getTempo(true), this.link.getTempo(true), true)
+      if (!this.link.isPlaying()) {
+        this.clock.stop(false)
+      }
+      this.clock.isPuppet = true
+      this.clock.puppetSource = sourceLink
+      console.log(this.clock.puppetSource)
+    }
   }
 
   this.update = () => {
@@ -329,7 +386,11 @@ function Client () {
     if (this.commander.isActive === true) {
       this.write(`${this.commander.query}${this.orca.f % 2 === 0 ? '_' : ''}`, this.grid.w * 0, this.orca.h + 1, this.grid.w * 4)
     } else {
-      this.write(this.orca.f < 25 ? `ver${this.version}` : `${Object.keys(this.source.cache).length} mods`, this.grid.w * 0, this.orca.h + 1, this.grid.w)
+      if (this.clock.isLinkEnabled()) {
+        this.write(`${this.numPeers} links`, this.grid.w * 0, this.orca.h + 1, this.grid.w)
+      } else {
+        this.write(this.orca.f < 25 ? `ver${this.version}` : `${Object.keys(this.source.cache).length} mods`, this.grid.w * 0, this.orca.h + 1, this.grid.w)
+      }
       this.write(`${this.orca.w}x${this.orca.h}`, this.grid.w * 1, this.orca.h + 1, this.grid.w)
       this.write(`${this.grid.w}/${this.grid.h}${this.tile.w !== 10 ? ' ' + (this.tile.w / 10).toFixed(1) : ''}`, this.grid.w * 2, this.orca.h + 1, this.grid.w)
       this.write(`${this.clock}`, this.grid.w * 3, this.orca.h + 1, this.grid.w, this.clock.isPuppet ? 3 : this.io.midi.isClock ? 11 : this.clock.isPaused ? 20 : 2)
@@ -464,6 +525,6 @@ function Client () {
 
   // Helpers
 
-  function display (str, f, max) { return str.length < max ? str : str.slice(f % str.length) + str.substr(0, f % str.length) }
-  function clamp (v, min, max) { return v < min ? min : v > max ? max : v }
+  function display(str, f, max) { return str.length < max ? str : str.slice(f % str.length) + str.substr(0, f % str.length) }
+  function clamp(v, min, max) { return v < min ? min : v > max ? max : v }
 }
