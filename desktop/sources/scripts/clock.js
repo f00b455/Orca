@@ -2,7 +2,7 @@
 
 /* global Blob */
 
-function Clock (client) {
+function Clock(client) {
   const workerScript = 'onmessage = (e) => { setInterval(() => { postMessage(true) }, e.data)}'
   const worker = window.URL.createObjectURL(new Blob([workerScript], { type: 'text/javascript' }))
 
@@ -166,5 +166,5 @@ function Clock (client) {
     return `${_message}${_beat}`
   }
 
-  function clamp (v, min, max) { return v < min ? min : v > max ? max : v }
+  function clamp(v, min, max) { return v < min ? min : v > max ? max : v }
 }

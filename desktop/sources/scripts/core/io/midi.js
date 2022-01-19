@@ -2,7 +2,7 @@
 
 /* global transposeTable */
 
-function Midi (client) {
+function Midi(client) {
   this.mode = 0
   this.isClock = false
 
@@ -241,5 +241,5 @@ function Midi (client) {
     return this.stack.length
   }
 
-  function clamp (v, min, max) { return v < min ? min : v > max ? max : v }
+  function clamp(v, min, max) { return v < min ? min : v > max ? max : v }
 }

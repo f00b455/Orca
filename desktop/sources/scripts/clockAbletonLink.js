@@ -1,22 +1,27 @@
 'use strict'
 
-/* global Blob */
-
 const sourceClock = 1
 const sourceLink = 2
 
 function ClockAbletonLink(client) {
-  const workerScript = 'onmessage = (e) => { setInterval(() => { postMessage(true) }, e.data)}'
-  const worker = window.URL.createObjectURL(new Blob([workerScript], { type: 'text/javascript' }))
 
-  this.isPaused = true
+
+  this.isPaused = false
   this.timer = null
   this.isPuppet = true
   this.puppetSource = 2
+  this.fire = 0
+  this.latency = 0.22
+  this.latencyStep = 0.01
 
   this.speed = { value: 120, target: 120 }
 
+  const abletonlink = require('abletonlink');
+  this.link = new abletonlink();
+
+
   this.start = function () {
+    console.log("clock start")
     const memory = parseInt(window.localStorage.getItem('bpm'))
     const target = memory >= 60 ? memory : 120
     this.setSpeed(target, target, true)
@@ -27,8 +32,7 @@ function ClockAbletonLink(client) {
   }
 
   this.run = function () {
-    if (this.speed.target === this.speed.value) { return }
-    this.setSpeed(this.speed.value + (this.speed.value < this.speed.target ? 1 : -1), null, true)
+
   }
 
   this.isLinkEnabled = function () {
@@ -40,33 +44,38 @@ function ClockAbletonLink(client) {
   }
 
   this.setSpeed = (value, target = null, setTimer = false) => {
+    console.log("clock setSpeed")
     if (this.speed.value === value && this.speed.target === target && this.timer) { return }
     if (value) { this.speed.value = clamp(value, 60, 300) }
     if (target) { this.speed.target = clamp(target, 60, 300) }
     if (setTimer === true) { this.setTimer(this.speed.value) }
+    this.setTimer(this.speed.value)
     this.setFrame(0)
   }
 
   this.setSpeedLink = (value) => {
-    client.link.setTempo(value)
-    if (!client.link.isPlaying()) {
+    console.log("clock setSpeedLink")
+    this.link.setTempo(value)
+    if (!this.link.isPlaying()) {
       this.setFrame(0)
       client.update()
     }
   }
 
   this.modSpeed = function (mod = 0, animate = false) {
-    if (animate === true) {
-      this.setSpeed(null, this.speed.target + mod)
-    } else {
-      this.setSpeed(this.speed.value + mod, this.speed.value + mod, true)
-      client.update()
-    }
+    console.log("clock modSpeed")
+
+    if (mod === 1) this.latency = this.latency + this.latencyStep;
+    if (mod === -1) this.latency = this.latency - this.latencyStep;
+
+    console.log(this.latency)
   }
 
   // Controls
 
   this.togglePlay = function (msg = false) {
+    console.log("clock togglePlay")
+    this.play(msg)
     if (this.isPaused === true) {
       this.play(msg)
     } else {
@@ -77,18 +86,11 @@ function ClockAbletonLink(client) {
 
   this.play = function (msg = false, midiStart = false, linkStart = false) {
     this.isPaused = false
-    this.setSpeed(this.speed.target, this.speed.target, true)
+    this.setTimer(120)
   }
 
   this.stop = function (msg = false) {
     console.log('Clock', 'Stop')
-    if (this.isPaused === true) { return }
-    this.isPaused = true
-    console.warn('Clock', 'Ableton Link')
-    this.clearTimer()
-    client.link.stop()
-    client.io.midi.allNotesOff()
-    client.io.midi.silence()
   }
 
   // External Clock
@@ -106,25 +108,23 @@ function ClockAbletonLink(client) {
   this.untap = function () {
   }
 
-  // Timer
+  // LinkTimer
 
   this.setTimer = function (bpm) {
-    if (bpm < 60) { console.warn('Clock', 'Error ' + bpm); return }
-    this.clearTimer()
-    window.localStorage.setItem('bpm', bpm)
-    this.timer = new Worker(worker)
-    this.timer.postMessage((60000 / parseInt(bpm)) / 4)
-    this.timer.onmessage = (event) => {
-      //client.io.midi.sendClock()
-      client.run()
-    }
+    console.log("setTimer")
+    this.link.startUpdate(1, (beat, phase, bpm) => {
+      var max = this.link.quantum * 4 // 16
+      var pos = Math.floor(phase * 4 + this.latency)
+      if (this.fire === pos) {
+        client.io.midi.sendClock()
+        client.run()
+        this.fire++
+        if (this.fire >= max) this.fire = 0
+      }
+    });
   }
 
   this.clearTimer = function () {
-    if (this.timer) {
-      this.timer.terminate()
-    }
-    this.timer = null
   }
 
   this.setFrame = function (f) {
@@ -135,11 +135,7 @@ function ClockAbletonLink(client) {
   // UI
 
   this.getUIMessage = function (offset) {
-    if (this.isLinkEnabled()) {
-      return `link${this.speed.value}`
-    } else {
-      return this.isExternalClockActive() ? 'midi' : `${this.speed.value}${offset}`
-    }
+    return `link ${this.speed.value}`
   }
 
   this.toString = function () {
@@ -152,3 +148,17 @@ function ClockAbletonLink(client) {
 
   function clamp(v, min, max) { return v < min ? min : v > max ? max : v }
 }
+/*
+................................
+..........1Cg...................
+...........0gT..*.*..*...*.**...
+..............:02C..............
+................................
+................................
+.............D4.................
+.............*:01C..............
+................................
+................................
+
+
+*/
