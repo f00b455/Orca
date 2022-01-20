@@ -10,7 +10,7 @@ function ClockAbletonLink(client) {
   this.timer = null
   this.isPuppet = true
   this.puppetSource = 2
-  this.fire = 0
+  this.fire = 1
   this.latency = 0.22
   this.latencyStep = 0.01
 
@@ -112,14 +112,14 @@ function ClockAbletonLink(client) {
 
   this.setTimer = function (bpm) {
     console.log("setTimer")
-    this.link.startUpdate(1, (beat, phase, bpm) => {
+    this.link.startUpdate(2, (beat, phase, bpm) => {
       var max = this.link.quantum * 4 // 16
-      var pos = Math.floor(phase * 4 + this.latency)
+      var pos = Math.floor(phase * 4 + 1 + this.latency)
       if (this.fire === pos) {
         client.io.midi.sendClock()
         client.run()
         this.fire++
-        if (this.fire >= max) this.fire = 0
+        if (this.fire > max) this.fire = 1
       }
     });
   }
